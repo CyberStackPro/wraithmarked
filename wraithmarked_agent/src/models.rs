@@ -10,6 +10,8 @@ pub enum ActivityType {
     Mouse,
     Wheel,
     Button,
+    Window,
+    System,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -46,12 +48,20 @@ pub enum MouseButton {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ActivityDetails {
+    // For keystroke and mouse
     pub key: Option<String>,
     pub mouse_button: Option<MouseButton>,
     pub mouse_x: Option<i32>,
     pub mouse_y: Option<i32>,
     pub scroll_direction: Option<ScrollDirection>,
     pub event_type: Option<EventType>,
+
+    // for Windows activity
+    pub app_name: Option<String>,
+    pub exec_name: Option<String>,
+    pub window_title: Option<String>,
+    pub url: Option<String>,
+    pub duration_active_seconds: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

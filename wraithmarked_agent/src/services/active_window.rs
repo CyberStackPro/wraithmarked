@@ -1,6 +1,10 @@
 use std::{thread, time::Duration};
 use x_win::get_active_window;
 
+struct ActiveWindowTracker {
+    is_tracking: bool,
+}
+
 pub fn active_window() {
     thread::spawn(monitor_active_window);
 }

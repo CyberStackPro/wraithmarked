@@ -85,15 +85,15 @@ const DATA_FILE_PATH: &str = "activity_data.json";
 
 // #[derive(Clone)]
 pub struct KeystrokeTracker {
-    pub is_tracking: bool,
-    pub recent_keys: Vec<String>,
-    pub activity_events: Vec<ActivityEvent>,
+    is_tracking: bool,
+    recent_keys: Vec<String>,
+    activity_events: Vec<ActivityEvent>,
 
-    pub total_mouse_clicks: u64,
-    pub total_scroll_events: u64,
-    pub total_keystrokes: u64,
+    total_mouse_clicks: u64,
+    total_scroll_events: u64,
+    total_keystrokes: u64,
 
-    pub start_time: Option<chrono::DateTime<Utc>>,
+    start_time: Option<chrono::DateTime<Utc>>,
 
     stop_signal: Arc<AtomicBool>,
     listener_handle: Option<thread::JoinHandle<()>>,
@@ -180,6 +180,12 @@ impl KeystrokeTracker {
                 mouse_y: None,
                 scroll_direction: direction.clone(),
                 event_type: Some(EventType::MouseWheel),
+                // for activity windows
+                app_name: None,
+                exec_name: None,
+                window_title: None,
+                url: None,
+                duration_active_seconds: None,
             },
         };
 
@@ -206,6 +212,12 @@ impl KeystrokeTracker {
                 mouse_y: None,
                 scroll_direction: None,
                 event_type: Some(EventType::KeyDown),
+                // for activity windows
+                app_name: None,
+                exec_name: None,
+                window_title: None,
+                url: None,
+                duration_active_seconds: None,
             },
         };
 
@@ -236,6 +248,12 @@ impl KeystrokeTracker {
                 mouse_y: Some(y as i32),
                 scroll_direction: None,
                 event_type: Some(EventType::MouseMove),
+                // for activity windows
+                app_name: None,
+                exec_name: None,
+                window_title: None,
+                url: None,
+                duration_active_seconds: None,
             },
         };
 
@@ -260,6 +278,13 @@ impl KeystrokeTracker {
                 mouse_y: None,
                 scroll_direction: None,
                 event_type: Some(EventType::ButtonPress),
+
+                // for activity windows
+                app_name: None,
+                exec_name: None,
+                window_title: None,
+                url: None,
+                duration_active_seconds: None,
             },
         };
 
@@ -322,6 +347,7 @@ impl KeystrokeTracker {
         if let Some(start_time) = self.start_time {
             let duration = Utc::now() - start_time;
             println!("Tracking duration: {} seconds", duration.num_seconds());
+            println!("Tracking duration: {} minutes", duration.num_minutes());
 
             if duration.num_seconds() > 0 {
                 let rate = (self.total_keystrokes as f64 * 60.0) / duration.num_seconds() as f64;
