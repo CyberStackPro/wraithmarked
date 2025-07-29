@@ -1,0 +1,23 @@
+# .gitignore in wraith_marked/
+# Ignore target directories for all Rust projects
+**/target/
+
+# Ignore editor/IDE specific files
+.idea/
+.vscode/
+*.iml
+
+# Ignore OS specific files
+.DS_Store
+Thumbs.db
+
+# Ignore Python virtual environments if you use them for the server
+venv/
+.venv/
+
+# Ignore node_modules for web UI
+node_modules/
+
+# Ignore specific data files from the agent
+# wraithmarked_agent/activity_data.json
+# wraithmarked_agent/wraithmarked_copies/
