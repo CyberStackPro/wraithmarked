@@ -174,18 +174,9 @@ impl KeystrokeTracker {
             timestamp: Utc::now(),
             activity_type: ActivityType::Wheel,
             details: ActivityDetails {
-                key: None,
-                mouse_button: None,
-                mouse_x: None,
-                mouse_y: None,
                 scroll_direction: direction.clone(),
                 event_type: Some(EventType::MouseWheel),
-                // for activity windows
-                app_name: None,
-                exec_name: None,
-                window_title: None,
-                url: None,
-                duration_active_seconds: None,
+                ..Default::default()
             },
         };
 
@@ -202,22 +193,18 @@ impl KeystrokeTracker {
     fn handle_key_press(&mut self, key: rdev::Key) {
         let key_str = format!("{:?}", key);
 
+        let mut cloned_keys = self.recent_keys.clone();
+        cloned_keys.push(key_str.clone());
+        let itr_key: Option<Vec<String>> = Some(cloned_keys);
+
         let activity = ActivityEvent {
             timestamp: Utc::now(),
             activity_type: ActivityType::Keyboard,
             details: ActivityDetails {
                 key: Some(key_str.clone()),
-                mouse_button: None,
-                mouse_x: None,
-                mouse_y: None,
-                scroll_direction: None,
+                recent_keys: itr_key,
                 event_type: Some(EventType::KeyDown),
-                // for activity windows
-                app_name: None,
-                exec_name: None,
-                window_title: None,
-                url: None,
-                duration_active_seconds: None,
+                ..Default::default()
             },
         };
 
@@ -242,18 +229,10 @@ impl KeystrokeTracker {
             timestamp: Utc::now(),
             activity_type: ActivityType::Mouse,
             details: ActivityDetails {
-                key: None,
-                mouse_button: None,
                 mouse_x: Some(x as i32),
                 mouse_y: Some(y as i32),
-                scroll_direction: None,
                 event_type: Some(EventType::MouseMove),
-                // for activity windows
-                app_name: None,
-                exec_name: None,
-                window_title: None,
-                url: None,
-                duration_active_seconds: None,
+                ..Default::default()
             },
         };
 
@@ -272,19 +251,10 @@ impl KeystrokeTracker {
             timestamp: Utc::now(),
             activity_type: ActivityType::Button,
             details: ActivityDetails {
-                key: None,
                 mouse_button: Some(mouse_button.clone()),
-                mouse_x: None,
-                mouse_y: None,
                 scroll_direction: None,
                 event_type: Some(EventType::ButtonPress),
-
-                // for activity windows
-                app_name: None,
-                exec_name: None,
-                window_title: None,
-                url: None,
-                duration_active_seconds: None,
+                ..Default::default()
             },
         };
 
@@ -299,6 +269,17 @@ impl KeystrokeTracker {
             mouse_button, self.total_mouse_clicks
         );
     }
+    pub fn stop_tracking(&mut self) {
+        self.stop_signal.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.listener_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(handle) = self.monitor_handle.take() {
+            let _ = handle.join();
+        }
+        self.is_tracking = false;
+    }
+
     pub fn save_activity_data_to_file(&self) -> Result<(), std::io::Error> {
         info!("Attempting to save activity data to {}", DATA_FILE_PATH);
         let json_data = serde_json::to_string_pretty(&self.activity_events)?; // Pretty print for readability
@@ -402,3 +383,15 @@ impl KeystrokeTracker {
 //         self.is_tracking = false;
 //     }
 // }
+
+// Example usage to construct KeystrokeTracker
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keystroke_tracker_construction() {
+        let tracker = KeystrokeTracker::new();
+        assert!(!tracker.is_tracking);
+    }
+}
