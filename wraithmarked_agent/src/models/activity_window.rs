@@ -1,3 +1,4 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -6,6 +7,7 @@ pub struct WindowInfo {
     pub name: String,
     pub path: String,
     pub process_id: u32,
+    pub timestamp: Option<chrono::DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

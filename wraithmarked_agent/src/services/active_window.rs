@@ -32,6 +32,7 @@ impl ActiveWindowTracker {
                 name: String::new(),
                 path: String::new(),
                 process_id: 0,
+                timestamp: None,
             },
         }
     }
