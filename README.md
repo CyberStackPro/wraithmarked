@@ -1,7 +1,3 @@
-Here is your cleaned-up `README.md` with **all references to Tauri removed**, including the tech stack, libraries, prerequisites, and installation notes:
-
----
-
 # WraithMarked Agent
 
 > _“Crao: The one who deciphers chaos. The silent ghost in your code.”_
