@@ -13,10 +13,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use super::tracker_trait::Tracker;
+
 const MAX_RECENT_KEYS: usize = 50;
 const MAX_RECENT_KEY_EVENTS: usize = 100;
 const MAX_MINUTE_HISTORY: usize = 60;
 const DATA_FILE_PATH: &str = "activity_data.json";
+const DATA_SAVE_INTERVAL_MINUTES: u64 = 5;
 
 // #[derive(Clone)]
 pub struct KeystrokeTracker {
@@ -28,8 +31,8 @@ pub struct KeystrokeTracker {
     pub start_time: Option<chrono::DateTime<Utc>>,
 
     stop_signal: Arc<AtomicBool>,
-    listener_handle: Option<thread::JoinHandle<()>>,
     monitor_handle: Option<thread::JoinHandle<()>>,
+    listener_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl KeystrokeTracker {
@@ -130,8 +133,8 @@ impl KeystrokeTracker {
                         tracker_guard.stats.recent_rate = 0.0;
                     }
 
-                    info!("Monitor: Stats updated. Keystrokes this minute: {}. Recent rate: {:.2} events/min",
-                          keystrokes_this_minute, tracker_guard.stats.recent_rate);
+                    // info!("Monitor: Stats updated. Keystrokes this minute: {}. Recent rate: {:.2} events/min",
+                    //       keystrokes_this_minute, tracker_guard.stats.recent_rate);
 
                     last_total_keystrokes = current_total_keystrokes;
                     last_minute_aggregation_time = now;
@@ -147,38 +150,34 @@ impl KeystrokeTracker {
 
         info!("KeystrokeTracker: All tracking threads started.");
         tracker_arc
-        // let tracker = Arc::new(Mutex::new(self));
-        // tracker.lock().unwrap().is_tracking = true;
-        // tracker.lock().unwrap().start_time = Some(Utc::now());
+    }
+    pub fn stop_tracking(&mut self) {
+        if !self.is_tracking {
+            info!("KeystrokeTracker: Not tracking.");
+            return;
+        }
 
-        // let cloned_tracker = Arc::clone(&tracker);
+        info!("KeystrokeTracker: Signaling threads to stop.");
+        self.is_tracking = false;
+        self.stop_signal.store(true, Ordering::SeqCst);
 
-        // thread::spawn(move || {
-        //     let result = listen(move |event| {
-        //         if let Ok(mut tracker) = cloned_tracker.lock() {
-        //             tracker.handle_event(event);
-        //         }
+        // Join listener thread
+        if let Some(handle) = self.listener_handle.take() {
+            info!("KeystrokeTracker: Waiting for listener thread to finish...");
+            handle
+                .join()
+                .expect("Listener thread panicked during join!");
+            info!("KeystrokeTracker: Listener thread joined.");
+        }
 
-        //         // match cloned_tracker.lock() {
-        //         //     Ok(mut tracker) => {
-        //         //         tracker.handle_event(event);
-        //         //     }
-        //         //     Err(err) => {
-        //         //         // Do nothing or log an error
-        //         //         eprintln!("Error listening to input events: {:?}", err);
-        //         //     }
-        //         // }
-        //     });
+        // Join monitor thread
+        if let Some(handle) = self.monitor_handle.take() {
+            info!("KeystrokeTracker: Waiting for monitor thread to finish...");
+            handle.join().expect("Monitor thread panicked during join!");
+            info!("KeystrokeTracker: Monitor thread joined.");
+        }
 
-        //     if let Err(err) = result {
-        //         eprintln!("Error listening to input events: {:?}", err);
-        //     }
-        // });
-        // tracker
-
-        // loop {
-        //     std::thread::sleep(std::time::Duration::from_secs(60));
-        // }
+        info!("KeystrokeTracker: All tracking threads stopped. Ready for data processing.");
     }
 
     fn handle_event(&mut self, event: Event) {
@@ -213,14 +212,10 @@ impl KeystrokeTracker {
         self.activity_events.push(wheel_activity);
         self.stats.total_scroll_events += 1;
 
-        info!(
-            "Wheel Activity: {:?} (Total Scrolls: {})",
-            direction, self.stats.total_scroll_events
-        );
-        println!(
-            "Scroll direction: {:?}, Total scrolls: {}",
-            direction, self.stats.total_scroll_events
-        );
+        // println!(
+        //     "Scroll direction: {:?}, Total scrolls: {}",
+        //     direction, self.stats.total_scroll_events
+        // );
     }
 
     fn handle_key_press(&mut self, key: rdev::Key) {
@@ -257,11 +252,10 @@ impl KeystrokeTracker {
             self.stats.recent_events.remove(0);
         }
 
-        info!("Key Press: {:?} (Total: {})", key, self.stats.total_count);
-        println!(
-            "Key pressed: {:?}, Total keystrokes: {}",
-            activity.details.key, self.stats.total_count
-        );
+        // println!(
+        //     "Key pressed: {:?}, Total keystrokes: {}",
+        //     activity.details.key, self.stats.total_count
+        // );
     }
 
     fn handle_mouse_move(&mut self, x: f64, y: f64) {
@@ -301,42 +295,10 @@ impl KeystrokeTracker {
         self.activity_events.push(button_activity);
         self.stats.total_mouse_clicks += 1;
 
-        info!(
-            "Mouse Button Press: {:?} (Total Clicks: {})",
-            mouse_button, self.stats.total_mouse_clicks
-        );
-        println!(
-            "Mouse button pressed: {:?}, Total clicks: {}",
-            mouse_button, self.stats.total_mouse_clicks
-        );
-    }
-    pub fn stop_tracking(&mut self) {
-        if !self.is_tracking {
-            info!("KeystrokeTracker: Not tracking.");
-            return;
-        }
-
-        info!("KeystrokeTracker: Signaling threads to stop.");
-        self.is_tracking = false;
-        self.stop_signal.store(true, Ordering::SeqCst);
-
-        // Join listener thread
-        if let Some(handle) = self.listener_handle.take() {
-            info!("KeystrokeTracker: Waiting for listener thread to finish...");
-            handle
-                .join()
-                .expect("Listener thread panicked during join!");
-            info!("KeystrokeTracker: Listener thread joined.");
-        }
-
-        // Join monitor thread
-        if let Some(handle) = self.monitor_handle.take() {
-            info!("KeystrokeTracker: Waiting for monitor thread to finish...");
-            handle.join().expect("Monitor thread panicked during join!");
-            info!("KeystrokeTracker: Monitor thread joined.");
-        }
-
-        info!("KeystrokeTracker: All tracking threads stopped. Ready for data processing.");
+        // info!(
+        //     "Mouse Button Press: {:?} (Total Clicks: {})",
+        //     mouse_button, self.stats.total_mouse_clicks
+        // );
     }
 
     pub fn save_activity_data_to_file(&self) -> Result<(), std::io::Error> {

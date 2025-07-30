@@ -4,21 +4,38 @@ use crate::models::{
 use crate::services::keystroke_tracker::KeystrokeTracker;
 use chrono::Utc;
 use log::{error, info};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{thread, time::Duration};
-use x_win::{empty_entity, get_active_window, get_browser_url, get_window_icon};
+use x_win::{get_active_window, WindowInfo as XWinWindowInfo};
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
+// #[cfg(any(target_os = "windows", target_os = "macos"))]
 use x_win::get_browser_url;
 
 pub struct ActiveWindowTracker {
     is_tracking: bool,
-    // details: WindowInfo,
+    stop_signal: Arc<AtomicBool>,
+    monitor_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl ActiveWindowTracker {
     pub fn new() -> Self {
-        Self { is_tracking: false }
+        Self {
+            is_tracking: false,
+            stop_signal: Arc::new(AtomicBool::new(false)),
+            monitor_handle: None,
+        }
+    }
+    // #[cfg(any(target_os = "windows", target_os = "macos"))]
+    fn get_url_for_platform(window_info: &XWinWindowInfo) -> Option<String> {
+        {
+            if let Ok(url) = get_browser_url(window_info) {
+                if !url.is_empty() {
+                    return Some(url);
+                }
+            }
+        }
+        None
     }
     pub fn start_tracking(mut self, tracker_arc: Arc<Mutex<KeystrokeTracker>>) -> Arc<Mutex<Self>> {
         if self.is_tracking {
@@ -28,25 +45,37 @@ impl ActiveWindowTracker {
         self.is_tracking = true;
         info!("[Window Tracking] Starting...");
 
+        let stop_signal_for_monitor = Arc::clone(&self.stop_signal);
+
         let active_window_tracker_arc = Arc::new(Mutex::new(self));
 
         let cloned_tracker_for_monitor = Arc::clone(&tracker_arc);
 
-        thread::spawn(move || {
+        // let cloned_active_window_tracker_arc = Arc::clone(&active_window_tracker_arc); // Clone for internal state (if needed in thread)
+
+        let monitor_handle = thread::spawn(move || {
             info!("[Window Monitor] Thread Started.");
 
             let mut last_logged_window_info: Option<LoggedWindowInfo> = None;
 
             loop {
+                if stop_signal_for_monitor.load(Ordering::SeqCst) {
+                    info!("[Window Monitor] Stop signal received, exiting.");
+                    break;
+                }
+
                 match get_active_window() {
                     Ok(current_win) => {
+                        let current_url = Self::get_url_for_platform(&current_win);
                         let current_logged_win_info = LoggedWindowInfo {
                             title: Some(current_win.title),
                             name: Some(current_win.info.name),
                             exec_name: Some(current_win.info.exec_name),
                             path: Some(current_win.info.path),
                             process_id: Some(current_win.id),
-                            url: Some(String::from("On linux url is not available")),
+
+                            // #[cfg(any(target_os = "windows", target_os = "macos"))]
+                            url: current_url,
                             timestamp: Utc::now(),
                         };
 
@@ -115,45 +144,35 @@ impl ActiveWindowTracker {
 
                     Err(e) => error!("[Window Monitor] Error fetching active window: {:?}", e),
                 }
-                thread::sleep(Duration::from_secs(1));
+                thread::sleep(Duration::from_secs(5));
             }
         });
+        {
+            let mut tracker_guard = active_window_tracker_arc.lock().unwrap();
+            tracker_guard.monitor_handle = Some(monitor_handle);
+        }
         active_window_tracker_arc
 
         // println!("Activity Window tracking is started");
     }
-}
-
-pub fn active_window() {
-    thread::spawn(monitor_active_window);
-}
-
-pub fn monitor_active_window() {
-    loop {
-        match get_active_window() {
-            Ok(win) => {
-                // let exec_name = win.info.exec_name;
-                // let name = win.info.name;
-
-                // let title = win.title;
-                // // let url = win;
-
-                // println!("App: {}", name);
-                // println!("Exec_name: {}", exec_name);
-
-                // println!("Title: {}", title);
-                // if !url.is_empty() {
-                //     println!("🌐 URL: {}", url);
-                // }
-
-                let active_windows_icon = get_window_icon(&win);
-
-                println!("Active Windows Icon: {:?}", active_windows_icon);
-                println!("All windows Info: {:?}", &win);
-            }
-            Err(e) => println!("⚠️ Error fetching active window: {:?}", e),
+    pub fn stop_tracking(&mut self) {
+        if !self.is_tracking {
+            info!("[Window Tracking] Not tracking.");
+            return;
         }
 
-        thread::sleep(Duration::from_secs(5));
+        info!("[Window Tracking] Signaling thread to stop.");
+        self.is_tracking = false;
+        self.stop_signal.store(true, Ordering::SeqCst);
+
+        if let Some(handle) = self.monitor_handle.take() {
+            info!("[Window Tracking] Waiting for monitor thread to finish...");
+            handle
+                .join()
+                .expect("Window monitor thread panicked during join!");
+            info!("[Window Tracking] Monitor thread joined.");
+        }
+
+        info!("[Window Tracking] Stopped tracking.");
     }
 }
