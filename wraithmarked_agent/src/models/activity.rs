@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{ActivityWindow, WindowInfo, WindowPosition, WindowUsage};
+use crate::models::{ActivityWindow, LoggedWindowInfo, WindowInfo, WindowPosition, WindowUsage};
 
 use super::enums::{ActivityType, EventType, MouseButton, ScrollDirection};
 
@@ -15,16 +15,15 @@ pub struct ActivityDetails {
     pub scroll_direction: Option<ScrollDirection>,
     pub event_type: Option<EventType>,
 
-    pub app_name: Option<String>,
-    pub exec_name: Option<String>,
-    pub window_title: Option<String>,
-    pub url: Option<String>,
+    // pub app_name: Option<String>,
+    // pub exec_name: Option<String>,
+    // pub window_title: Option<String>,
+    // pub url: Option<String>,
+    pub window_info: Option<LoggedWindowInfo>,
     pub duration_active_seconds: Option<u64>,
-
-    pub window_info: Option<WindowInfo>,
-    pub position: Option<WindowPosition>,
-    pub usage: Option<WindowUsage>,
-    pub full_window: Option<ActivityWindow>,
+    // pub position: Option<WindowPosition>,
+    // pub usage: Option<WindowUsage>,
+    // pub full_window: Option<ActivityWindow>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

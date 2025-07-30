@@ -14,11 +14,17 @@ pub enum ActivityType {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum EventType {
-    KeyUp,
     KeyDown,
+    KeyUp,
+    Click,
+    Move,
+    Wheel,
+    Scroll,
+    ButtonPress,
+    MouseDown,
     MouseMove,
     MouseWheel,
-    ButtonPress,
+    WindowFocusChange,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
