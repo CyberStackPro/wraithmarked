@@ -1,8 +1,6 @@
-use crate::models::{
-    ActivityDetails, ActivityEvent, ActivityType, EventType, LoggedWindowInfo, WindowInfo,
-};
+use crate::models::{ActivityDetails, ActivityEvent, ActivityType, EventType, LoggedWindowInfo};
 use crate::services::keystroke_tracker::KeystrokeTracker;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use log::{error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -26,36 +24,26 @@ impl ActiveWindowTracker {
             monitor_handle: None,
         }
     }
-    // #[cfg(any(target_os = "windows", target_os = "macos"))]
-    fn get_url_for_platform(window_info: &XWinWindowInfo) -> Option<String> {
-        {
-            if let Ok(url) = get_browser_url(window_info) {
-                if !url.is_empty() {
-                    return Some(url);
-                }
-            }
-        }
-        None
-    }
-    pub fn start_tracking(mut self, tracker_arc: Arc<Mutex<KeystrokeTracker>>) -> Arc<Mutex<Self>> {
+
+    pub fn start_tracking(
+        mut self,
+        shared_keystroke_tracker: Arc<Mutex<KeystrokeTracker>>,
+    ) -> Arc<Mutex<Self>> {
         if self.is_tracking {
             info!("[Window Tracking] Already Tracking.");
+            return Arc::new(Mutex::new(self));
         }
 
         self.is_tracking = true;
         info!("[Window Tracking] Starting...");
 
         let stop_signal_for_monitor = Arc::clone(&self.stop_signal);
-
-        let active_window_tracker_arc = Arc::new(Mutex::new(self));
-
-        let cloned_tracker_for_monitor = Arc::clone(&tracker_arc);
-
-        // let cloned_active_window_tracker_arc = Arc::clone(&active_window_tracker_arc); // Clone for internal state (if needed in thread)
+        let cloned_tracker_for_monitor = Arc::clone(&shared_keystroke_tracker);
+        let this_tracker_arc = Arc::new(Mutex::new(self));
+        let cloned_this_tracker_arc = Arc::clone(&this_tracker_arc);
 
         let monitor_handle = thread::spawn(move || {
             info!("[Window Monitor] Thread Started.");
-
             let mut last_logged_window_info: Option<LoggedWindowInfo> = None;
 
             loop {
@@ -65,16 +53,14 @@ impl ActiveWindowTracker {
                 }
 
                 match get_active_window() {
-                    Ok(current_win) => {
-                        let current_url = Self::get_url_for_platform(&current_win);
+                    Ok(current_xwin_info) => {
+                        let current_url = Self::get_url_for_platform(&current_xwin_info);
                         let current_logged_win_info = LoggedWindowInfo {
-                            title: Some(current_win.title),
-                            name: Some(current_win.info.name),
-                            exec_name: Some(current_win.info.exec_name),
-                            path: Some(current_win.info.path),
-                            process_id: Some(current_win.id),
-
-                            // #[cfg(any(target_os = "windows", target_os = "macos"))]
+                            title: Some(current_xwin_info.title),
+                            name: Some(current_xwin_info.info.name),
+                            exec_name: Some(current_xwin_info.info.exec_name),
+                            path: Some(current_xwin_info.info.path),
+                            process_id: Some(current_xwin_info.id),
                             url: current_url,
                             timestamp: Utc::now(),
                         };
@@ -114,47 +100,46 @@ impl ActiveWindowTracker {
                                         ..Default::default()
                                     },
                                 };
-
                                 if let Ok(mut tracker_guard) = cloned_tracker_for_monitor.lock() {
                                     tracker_guard.activity_events.push(prev_window_activity);
                                 } else {
                                     error!("[Window Monitor] Failed to acquire tracker lock for previous window event.");
                                 }
                             }
-                        }
 
-                        last_logged_window_info = Some(current_logged_win_info.clone());
+                            last_logged_window_info = Some(current_logged_win_info.clone());
 
-                        let current_window_activity = ActivityEvent {
-                            timestamp: current_logged_win_info.timestamp,
-                            activity_type: ActivityType::Window,
-                            details: ActivityDetails {
-                                event_type: Some(EventType::WindowFocusChange),
-                                window_info: Some(current_logged_win_info),
-                                duration_active_seconds: None,
-                                ..Default::default()
-                            },
-                        };
-                        if let Ok(mut tracker_guard) = cloned_tracker_for_monitor.lock() {
-                            tracker_guard.activity_events.push(current_window_activity);
-                        } else {
-                            error!("[Window Monitor] Failed to acquire tracker lock for current window event.");
+                            let current_window_activity = ActivityEvent {
+                                timestamp: current_logged_win_info.timestamp,
+                                activity_type: ActivityType::Window,
+                                details: ActivityDetails {
+                                    event_type: Some(EventType::WindowFocusChange),
+                                    window_info: Some(current_logged_win_info),
+                                    duration_active_seconds: None,
+                                    ..Default::default()
+                                },
+                            };
+                            if let Ok(mut tracker_guard) = cloned_tracker_for_monitor.lock() {
+                                tracker_guard.activity_events.push(current_window_activity);
+                            } else {
+                                error!("[Window Monitor] Failed to acquire tracker lock for current window event.");
+                            }
                         }
                     }
-
                     Err(e) => error!("[Window Monitor] Error fetching active window: {:?}", e),
                 }
-                thread::sleep(Duration::from_secs(5));
+                thread::sleep(Duration::from_secs(1));
             }
         });
+
         {
-            let mut tracker_guard = active_window_tracker_arc.lock().unwrap();
+            let mut tracker_guard = this_tracker_arc.lock().unwrap();
             tracker_guard.monitor_handle = Some(monitor_handle);
         }
-        active_window_tracker_arc
 
-        // println!("Activity Window tracking is started");
+        this_tracker_arc
     }
+
     pub fn stop_tracking(&mut self) {
         if !self.is_tracking {
             info!("[Window Tracking] Not tracking.");
@@ -174,5 +159,21 @@ impl ActiveWindowTracker {
         }
 
         info!("[Window Tracking] Stopped tracking.");
+    }
+
+    pub fn print_summary(&self) {
+        info!("ActiveWindowTracker: No specific summary to print, events are pushed to KeystrokeTracker.");
+    }
+
+    fn get_url_for_platform(window_info: &XWinWindowInfo) -> Option<String> {
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        {
+            if let Ok(url) = x_win::get_browser_url(window_info) {
+                if !url.is_empty() {
+                    return Some(url);
+                }
+            }
+        }
+        None
     }
 }

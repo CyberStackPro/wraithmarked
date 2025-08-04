@@ -1,0 +1,47 @@
+#V2
+help
+agents
+l
+agents
+agents ae1f5-4c2b-8a9d-5f3e4
+clear
+exit
+help
+agents
+agents ?
+cls
+clear
+help
+screenshot
+agents
+use ae1f5-4c2b-8a9d-5f3e4
+ls
+cat user_credentials.txt
+screenshot
+keylog
+shell
+info
+processes
+ls
+back
+ls
+agents
+use 7a6b5-3c4d-2e1f-9g8h
+ls
+shell dump
+clear
+help
+shell
+shell -help
+ps
+shell ps
+shell ipconfig
+exit
+help
+kill 2323
+agents
+use b9c8d-1a2e-3b4f-6c7d8
+ls
+shell ps
+shell kill 2048
+exit

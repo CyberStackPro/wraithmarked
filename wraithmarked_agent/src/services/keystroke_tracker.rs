@@ -66,11 +66,13 @@ impl KeystrokeTracker {
 
         let listener_handle = thread::spawn(move || {
             info!("KeystrokeTracker Listener: Starting...");
+
             let result = listen(move |event| {
                 if stop_signal_for_listener.load(Ordering::SeqCst) {
-                    info!(
-                        "KeystrokeTracker Listener: Stop signal received, exiting event handler."
-                    );
+                    static ONCE: std::sync::Once = std::sync::Once::new();
+                    ONCE.call_once(|| {
+                        info!("Listener: Stop signal received, exiting event handler.");
+                    });
                     return;
                 }
 
@@ -94,13 +96,15 @@ impl KeystrokeTracker {
             info!("KeystrokeTracker Monitor: Starting periodic monitor thread.");
             let mut last_minute_aggregation_time = Utc::now();
             let mut last_total_keystrokes = 0;
+            let mut last_save_time = Utc::now();
+
             loop {
                 if stop_signal_for_monitor.load(Ordering::SeqCst) {
                     info!("KeystrokeTracker Monitor: Stop signal received, exiting.");
                     break;
                 }
 
-                thread::sleep(Duration::from_secs(10)); // Check every 10 seconds
+                thread::sleep(Duration::from_secs(10));
 
                 let now = Utc::now();
                 if (now - last_minute_aggregation_time) >= chrono::Duration::seconds(60) {
@@ -133,11 +137,41 @@ impl KeystrokeTracker {
                         tracker_guard.stats.recent_rate = 0.0;
                     }
 
-                    // info!("Monitor: Stats updated. Keystrokes this minute: {}. Recent rate: {:.2} events/min",
-                    //       keystrokes_this_minute, tracker_guard.stats.recent_rate);
-
                     last_total_keystrokes = current_total_keystrokes;
                     last_minute_aggregation_time = now;
+                }
+                if (now - last_save_time)
+                    >= chrono::Duration::minutes(DATA_SAVE_INTERVAL_MINUTES as i64)
+                {
+                    let tracker_guard = cloned_tracker_for_monitor.lock().unwrap();
+                    info!(
+                        "Monitor: {} minutes elapsed, attempting to save activity data.",
+                        DATA_SAVE_INTERVAL_MINUTES
+                    );
+                    let timestamp_str = now.format("%Y%m%d_%H%M%S").to_string();
+                    let unique_filename = format!("{}_{}.json", DATA_FILE_PATH, timestamp_str);
+                    let save_path = std::path::Path::new(&unique_filename);
+
+                    match serde_json::to_string_pretty(&tracker_guard.activity_events) {
+                        Ok(json_data) => match File::create(&save_path) {
+                            Ok(mut file) => match file.write_all(json_data.as_bytes()) {
+                                Ok(_) => {
+                                    info!("Activity data saved successfully to {:?}", save_path)
+                                }
+                                Err(e) => error!(
+                                    "Failed to write activity data to file {:?}: {:?}",
+                                    save_path, e
+                                ),
+                            },
+                            Err(e) => error!("Failed to create file {:?}: {:?}", save_path, e),
+                        },
+                        Err(e) => error!("Failed to serialize activity data: {:?}", e),
+                    }
+                    drop(tracker_guard);
+                    let mut tracker_guard = cloned_tracker_for_monitor.lock().unwrap();
+                    tracker_guard.activity_events.clear();
+                    info!("Activity events buffer cleared.");
+                    last_save_time = now;
                 }
             }
             info!("KeystrokeTracker Monitor: Thread finished.");
@@ -151,6 +185,7 @@ impl KeystrokeTracker {
         info!("KeystrokeTracker: All tracking threads started.");
         tracker_arc
     }
+
     pub fn stop_tracking(&mut self) {
         if !self.is_tracking {
             info!("KeystrokeTracker: Not tracking.");
@@ -161,23 +196,18 @@ impl KeystrokeTracker {
         self.is_tracking = false;
         self.stop_signal.store(true, Ordering::SeqCst);
 
-        // Join listener thread
-        if let Some(handle) = self.listener_handle.take() {
-            info!("KeystrokeTracker: Waiting for listener thread to finish...");
-            handle
-                .join()
-                .expect("Listener thread panicked during join!");
-            info!("KeystrokeTracker: Listener thread joined.");
-        }
-
-        // Join monitor thread
+        // Join monitor thread first
         if let Some(handle) = self.monitor_handle.take() {
             info!("KeystrokeTracker: Waiting for monitor thread to finish...");
             handle.join().expect("Monitor thread panicked during join!");
             info!("KeystrokeTracker: Monitor thread joined.");
         }
 
-        info!("KeystrokeTracker: All tracking threads stopped. Ready for data processing.");
+        // The listener thread will not join because rdev::listen is a blocking call.
+        // We will rely on std::process::exit(0) to kill the thread gracefully
+        // after all cleanup has been done.
+        info!("KeystrokeTracker: Listener thread cannot be joined gracefully (rdev::listen is blocking).");
+        info!("KeystrokeTracker: Ready for final cleanup and exit.");
     }
 
     fn handle_event(&mut self, event: Event) {
@@ -232,7 +262,6 @@ impl KeystrokeTracker {
             details: ActivityDetails {
                 key: Some(key_str.clone()),
                 event_type: Some(EventType::KeyDown),
-                // All other fields are set to their default (None for Option, 0 for numbers)
                 ..Default::default()
             },
         };
@@ -243,7 +272,7 @@ impl KeystrokeTracker {
         }
 
         self.activity_events.push(activity.clone());
-        self.stats.total_count += 1; // Increment total keystrokes in `stats`
+        self.stats.total_count += 1;
         self.stats.recent_events.push(KeystrokeEvent {
             timestamp: now,
             key: activity.details.key.clone().unwrap_or_default(),
@@ -302,13 +331,16 @@ impl KeystrokeTracker {
     }
 
     pub fn save_activity_data_to_file(&self) -> Result<(), std::io::Error> {
-        info!("Attempting to save activity data to {}", DATA_FILE_PATH);
-        let json_data = serde_json::to_string_pretty(&self.activity_events)?; // Pretty print for readability
-        let mut file = File::create(DATA_FILE_PATH)?;
+        info!("Attempting to save final activity data.");
+        let timestamp_str = Utc::now().format("%Y%m%d_%H%M%S").to_string();
+        let filename = format!("{}_{}.json", DATA_FILE_PATH, timestamp_str);
+        let json_data = serde_json::to_string_pretty(&self.activity_events)?;
+        let mut file = File::create(filename)?;
         file.write_all(json_data.as_bytes())?;
-        info!("Activity data saved successfully to {}", DATA_FILE_PATH);
+        info!("Final activity data saved successfully.");
         Ok(())
     }
+
     pub fn clear_stats(&mut self) {
         self.recent_keys.clear();
         self.activity_events.clear();
@@ -316,10 +348,10 @@ impl KeystrokeTracker {
         self.start_time = Some(Utc::now());
 
         info!("Tracker stats cleared.");
-        println!("Tracker stats cleared.");
     }
+
     pub fn print_summary(&self) {
-        println!("===== Activity Summary =====");
+        println!("===== KeystrokeTracker Summary =====");
         println!("Total keystrokes: {}", self.stats.total_count);
         println!("Total mouse clicks: {}", self.stats.total_mouse_clicks);
         println!("Total scroll events: {}", self.stats.total_scroll_events);
@@ -352,7 +384,6 @@ impl KeystrokeTracker {
     }
 }
 
-// Example usage to construct KeystrokeTracker
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,9 +1,6 @@
 use crate::services::keystroke_tracker::KeystrokeTracker;
 use std::sync::{Arc, Mutex}; // Required for ActiveWindowTracker's start method
 
-// Define the Tracker trait
-// `Send` and `Sync` bounds are necessary for `dyn Tracker` to be used with `Arc<Mutex>`
-// and moved across thread boundaries safely.
 pub trait Tracker: Send + Sync {
     // `start` method:
     // Takes `&self` (meaning `&Arc<Mutex<Self>>`).
