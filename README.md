@@ -1,9 +1,9 @@
 # WraithMarked
 
 ![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)
-![Build](https://img.shields.io/github/actions/workflow/status/CyberStackPro/wraithmarked/rust.yml?label=build)
-![License](https://img.shields.io/github/license/CyberStackPro/wraithmarked)
-![Issues](https://img.shields.io/github/issues/CyberStackPro/wraithmarked)
+![Build](https://img.shields.io/github/actions/workflow/status/cyberstackpro/wraithmarked/rust.yml?label=build)
+![License](https://img.shields.io/github/license/cyberstackpro/wraithmarked)
+![Issues](https://img.shields.io/github/issues/cyberstackpro/wraithmarked)
 
 > _Crao: The one who deciphers chaos. The silent ghost in your code._
 
