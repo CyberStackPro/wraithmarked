@@ -1,6 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/*
+    FFI = Foreign Function Interface
+
+        It's how Rust talks to code written in other languages like C, C++, or even assembly.
+*/
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WindowInfo {
     pub title: String,
@@ -45,5 +51,5 @@ pub struct LoggedWindowInfo {
     pub path: Option<String>,      // Executable path
     pub process_id: Option<u32>,   // Process ID
     pub url: Option<String>,       // Browser URL
-    pub timestamp: DateTime<Utc>,  // When this specific window state was recorded (became active)
+    pub timestamp: DateTime<Utc>,
 }
