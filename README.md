@@ -22,9 +22,10 @@ This project is a proof-of-concept agent designed for **authorized penetration t
 
 ## Project Overview
 
-**WraithMarked** is a minimal, stealth-first, cross-platform activity monitoring agent (RAT-style PoC) built in Rust. It focuses on silent system visibility while maintaining low overhead, using low-level system hooks for real-time insight collection.
+**WraithMarked** is a minimal, stealth-first, cross-platform Command & Control (C2) framework built in Rust. Its primary focus is to demonstrate how low-level system hooks can be used to achieve silent system visibility with minimal overhead. It is a powerful tool for ethical red teaming, adversary simulation, and defensive tool development.
 
-This project aims to demonstrate practical techniques used in red teaming, adversary simulation, and digital forensics.
+**Features & Roadmap**
+This project is a work-in-progress, with a clear focus on modularity and stealth.
 
 ---
 
