@@ -45,3 +45,32 @@ ls
 shell ps
 shell kill 2048
 exit
+help
+agents
+use ae1f5-4c2b-8a9d-5f3e4
+ls
+exit
+ls
+use 33
+list
+agents
+use 5e4f3-2d1c-7b8a-9h0g
+ls
+help
+info
+screenshot
+keylog start
+hiatory
+shell
+shell cd
+shell ls
+ls
+cd
+ls
+back
+processes
+use agent 5e4f3-2d1c-7b8a-9h0g
+agents
+use 5e4f3-2d1c-7b8a-9h0g
+processes
+exit
