@@ -3,12 +3,38 @@ name = "wraithmarked_c2"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "cli"
+path = "src/main.rs"
+
 [dependencies]
 comfy-table = "7.0.1"
 rustyline = "12.0.0"
-# serde = { version = "1.0", features = ["derive"] }
-# serde_json = "1.0"
 tokio = { version = "1.34", features = ["full"] }
-# tokio = { version = "1.34", features = ["rt-multi-thread", "macros", "time"] }
+rand = "0.8"
 
-# warp = "0.3"
+reqwest = { version = "0.11", features = [
+    "blocking",
+    "json",
+    "stream",
+    "gzip",
+    "brotli",
+    "rustls-tls",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures-util = "0.3"
+indicatif = "0.17"
+axum = "0.8.6"
+
+# New dependencies for C2 server
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+anyhow = "1.0.100"
+httpc-test = "0.1.8"

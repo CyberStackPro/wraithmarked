@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use super::tracker_trait::Tracker;
+// use super::tracker_trait::Tracker;
 
 const MAX_RECENT_KEYS: usize = 50;
 const MAX_RECENT_KEY_EVENTS: usize = 100;
