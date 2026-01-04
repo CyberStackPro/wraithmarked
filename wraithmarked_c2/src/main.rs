@@ -10,7 +10,7 @@ use std::{
 mod c2_server;
 mod models;
 
-type SharedState = Arc<Mutex<AppState>>;
+pub type SharedState = Arc<Mutex<AppState>>;
 
 #[tokio::main]
 async fn main() {

