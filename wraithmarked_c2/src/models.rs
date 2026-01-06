@@ -1,7 +1,16 @@
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
 
-/// Represents an agent that has connected to the C2 server
+// ============================================================================
+// TYPE ALIASES
+// ============================================================================
+
+/// Shared state type used across the application
+/// Arc = Atomic Reference Counting (multiple owners)
+/// Mutex = Mutual Exclusion (one writer at a time)
+pub type SharedState = Arc<Mutex<AppState>>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agent {
     pub id: String,
@@ -37,7 +46,10 @@ pub enum CommandType {
     // TODO: Add more types as you implement features
     // Download,
     // Upload,
-    // Screenshot,
+    // Screenshot,      TODO: Implement later
+    // FileList,        TODO: Implement later
+    // FileDownload,    TODO: Implement later
+    // FileUpload,      TODO: Implement later
 }
 
 /// Result from agent after executing command
@@ -50,7 +62,9 @@ pub struct CommandResult {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-// === API REQUEST/RESPONSE MODELS ===
+// ============================================================================
+// API REQUEST/RESPONSE MODELS
+// ============================================================================
 
 /// Agent sends this when first connecting
 #[derive(Debug, Deserialize)]
@@ -100,25 +114,28 @@ pub struct ResultResponse {
     pub success: bool,
 }
 
-// === APPLICATION STATE ===
+// ============================================================================
+// APPLICATION STATE
+// ============================================================================
 
 /// Shared state across all handlers
 pub struct AppState {
-    pub agents: std::collections::HashMap<String, Agent>,
+    /// All registered agents (agent_id -> Agent)
+    pub agents: HashMap<String, Agent>,
 
-    // Command queue per agent (agent_id -> queue of commands)
-    pub command_queues: std::collections::HashMap<String, VecDeque<Command>>,
+    /// Command queue per agent (agent_id -> queue of commands)
+    pub command_queues: HashMap<String, VecDeque<Command>>,
 
-    // Store results (command_id -> result)
-    pub results: std::collections::HashMap<String, CommandResult>,
+    /// Store results (command_id -> result)
+    pub results: HashMap<String, CommandResult>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
-            agents: std::collections::HashMap::new(),
-            command_queues: std::collections::HashMap::new(),
-            results: std::collections::HashMap::new(),
+            agents: HashMap::new(),
+            command_queues: HashMap::new(),
+            results: HashMap::new(),
         }
     }
 }

