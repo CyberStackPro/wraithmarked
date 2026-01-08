@@ -114,6 +114,36 @@ pub struct ResultResponse {
     pub success: bool,
 }
 
+/// Request to queue a command for an agent
+#[derive(Debug, Deserialize)]
+pub struct QueueCommandRequest {
+    pub agent_id: String,
+    pub command_type: CommandType,
+    pub payload: String,
+}
+
+/// Response after queuing a command
+#[derive(Debug, Serialize)]
+pub struct QueueCommandResponse {
+    pub success: bool,
+    pub command_id: String,
+    pub message: String,
+}
+
+/// Response with list of all agents
+#[derive(Debug, Serialize)]
+pub struct ListAgentsResponse {
+    pub agents: Vec<Agent>,
+}
+
+/// Response with command result
+#[derive(Debug, Serialize)]
+pub struct GetResultResponse {
+    pub success: bool,
+    pub result: Option<CommandResult>,
+    pub message: String,
+}
+
 // ============================================================================
 // APPLICATION STATE
 // ============================================================================

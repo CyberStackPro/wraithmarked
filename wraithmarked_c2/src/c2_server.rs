@@ -1,9 +1,9 @@
 use axum::{
-    Router,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::Json,
     routing::{get, post},
+    Router,
 };
 use chrono::Utc;
 use std::{
@@ -27,15 +27,8 @@ pub async fn start_server() {
         .route("/api/beacon", post(handle_beacon))
         .route("/api/result", post(handle_result))
         .route("/api/command", post(handle_queue_command))
-        .route("/api/agents", get(handle_get_agents))
-        .route(
-            "/api/result/:id",
-            get(handle_get_results(state, command_id)),
-        )
-        // TODO: Add more routes as you implement them
-        // .route("/api/command", post(handle_queue_command))
-        // .route("/api/agents", get(handle_list_agents))
-        // .route("/api/result/:id", get(handle_get_result))
+        .route("/api/agents", get(handle_list_agents))
+        .route("/api/result/:command_id", get(handle_get_result))
         .with_state(state);
 
     // Bind to address
@@ -143,82 +136,100 @@ async fn handle_result(
 }
 
 // ============================================================================
-// HELPER FUNCTIONS (FOR FUTURE USE)
+// HELPER FUNCTIONS
 // ============================================================================
 
-/// Add a command to an agent's queue (will be called from CLI later)
-pub fn queue_command(
-    state: &mut AppState,
-    agent_id: String,
-    command_type: CommandType,
-    payload: String,
-) -> Result<String, String> {
-    // Check if agent exists
-    if !state.agents.contains_key(&agent_id) {
-        return Err(format!("Agent {} not found", agent_id));
-    }
-
-    // Create command with unique ID
-    let command_id = uuid::Uuid::new_v4().to_string();
-    let command = Command {
-        id: command_id.clone(),
-        agent_id: agent_id.clone(),
-        command_type,
-        payload,
-        created_at: Utc::now(),
-    };
-
-    // Add to queue
-    if let Some(queue) = state.command_queues.get_mut(&agent_id) {
-        queue.push_back(command);
-        Ok(command_id)
-    } else {
-        Err("Failed to access command queue".to_string())
-    }
-}
-
-pub fn handle_queue_command(
-    State(state): State<SharedState>,
-    Json(req): Json<Command>,
-) -> Result<Json<CommandResult>, (StatusCode, String)> {
-    let mut state = state.lock().unwrap();
-
-    match queue_command(&mut state, req.agent_id, req.command_type, req.payload) {
-        Ok(command_id) => Ok(Json(CommandResult {
-            agent_id: req.agent_id,
-            output: "".to_string(),
-            timestamp: Utc::now(),
-            success: true,
-            command_id,
-        })),
-        Err(err) => Err((StatusCode::BAD_REQUEST, err)),
-    }
-}
-
-/// Get all registered agents
+/// Get all registered agents (helper function)
 pub fn get_agents(state: &AppState) -> Vec<Agent> {
     state.agents.values().cloned().collect()
 }
 
-pub fn handle_get_agents(State(state): State<SharedState>) -> Json<Vec<Agent>> {
-    let state = state.lock().unwrap();
-    let agents = get_agents(&state);
-    Json(agents)
-}
-
-/// Get result for a command
+/// Get result for a command (helper function)
 pub fn get_result(state: &AppState, command_id: &str) -> Option<CommandResult> {
     state.results.get(command_id).cloned()
 }
 
-pub fn handle_get_results(
+/// Handle request to queue a command for an agent
+async fn handle_queue_command(
     State(state): State<SharedState>,
-    command_id: String,
-) -> Result<Json<CommandResult>, (StatusCode, String)> {
-    let state = state.lock().unwrap();
-    if let Some(result) = get_result(&state, &command_id) {
-        Ok(Json(result))
+    Json(req): Json<QueueCommandRequest>,
+) -> Result<Json<QueueCommandResponse>, (StatusCode, String)> {
+    println!("📤 Queuing command for agent: {}", req.agent_id);
+
+    let mut state = state.lock().unwrap();
+
+    // Check if agent exists
+    if !state.agents.contains_key(&req.agent_id) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Agent {} not found", req.agent_id),
+        ));
+    }
+
+    // Generate unique command ID
+    let command_id = uuid::Uuid::new_v4().to_string();
+
+    // Create command
+    let command = Command {
+        id: command_id.clone(),
+        agent_id: req.agent_id.clone(),
+        command_type: req.command_type,
+        payload: req.payload,
+        created_at: Utc::now(),
+    };
+
+    // Add to queue
+    if let Some(queue) = state.command_queues.get_mut(&req.agent_id) {
+        queue.push_back(command);
+        println!("   ✅ Command queued successfully: {}", command_id);
+
+        Ok(Json(QueueCommandResponse {
+            success: true,
+            command_id,
+            message: "Command queued successfully".to_string(),
+        }))
     } else {
-        Err((StatusCode::NOT_FOUND, "Result not found".to_string()))
+        Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to access command queue".to_string(),
+        ))
+    }
+}
+
+/// List all registered agents
+async fn handle_list_agents(State(state): State<SharedState>) -> Json<ListAgentsResponse> {
+    println!("📋 Listing all agents");
+
+    let state = state.lock().unwrap();
+    let agents: Vec<Agent> = state.agents.values().cloned().collect();
+
+    println!("   Found {} agent(s)", agents.len());
+
+    Json(ListAgentsResponse { agents })
+}
+
+/// Get result for a specific command
+async fn handle_get_result(
+    State(state): State<SharedState>,
+    Path(command_id): Path<String>,
+) -> Json<GetResultResponse> {
+    println!("🔍 Looking up result for command: {}", command_id);
+
+    let state = state.lock().unwrap();
+
+    if let Some(result) = state.results.get(&command_id).cloned() {
+        println!("   ✅ Result found");
+        Json(GetResultResponse {
+            success: true,
+            result: Some(result),
+            message: "Result found".to_string(),
+        })
+    } else {
+        println!("   ⚠️ Result not found");
+        Json(GetResultResponse {
+            success: false,
+            result: None,
+            message: "Result not found".to_string(),
+        })
     }
 }
