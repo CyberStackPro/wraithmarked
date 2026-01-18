@@ -1,9 +1,9 @@
 use axum::{
+    Router,
     extract::{Path, State},
     http::StatusCode,
     response::Json,
     routing::{get, post},
-    Router,
 };
 use chrono::Utc;
 use std::{
@@ -28,7 +28,7 @@ pub async fn start_server() {
         .route("/api/result", post(handle_result))
         .route("/api/command", post(handle_queue_command))
         .route("/api/agents", get(handle_list_agents))
-        .route("/api/result/:command_id", get(handle_get_result))
+        .route("/api/result/command_id", get(handle_get_result))
         .with_state(state);
 
     // Bind to address
